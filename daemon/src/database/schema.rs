@@ -184,6 +184,29 @@ table! {
     }
 }
 
+table! {
+    use diesel::sql_types::*;
+    use super::LatLong;
+    reported_value_with_grid_property_value_and_reporter (property_name, end_block_num) {
+        property_name -> Text,
+        record_id -> Text,
+        reporter_index -> Int4,
+        timestamp -> Int8,
+        value_name -> Text,
+        data_type -> Text,
+        bytes_value ->  Nullable<Bytea>,
+        boolean_value ->  Nullable<Bool>,
+        number_value ->  Nullable<Int8>,
+        string_value ->  Nullable<Text>,
+        enum_value ->  Nullable<Int4>,
+        struct_values ->  Nullable<Array<Text>>,
+        lat_long_value -> Nullable<LatLong>,
+        end_block_num -> Int8,
+        public_key -> Text,
+        authorized -> Bool,
+    }
+}
+
 allow_tables_to_appear_in_same_query!(
     agent,
     associated_agent,

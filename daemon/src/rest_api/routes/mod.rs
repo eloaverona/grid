@@ -16,11 +16,13 @@ mod agents;
 mod batches;
 mod organizations;
 mod schemas;
+mod track_and_trace;
 
 pub use agents::*;
 pub use batches::*;
 pub use organizations::*;
 pub use schemas::*;
+pub use track_and_trace::*;
 
 use crate::database::ConnectionPool;
 
@@ -61,8 +63,14 @@ mod test {
     use crate::database;
     use crate::database::{
         helpers::MAX_BLOCK_NUM,
-        models::{NewAgent, NewGridPropertyDefinition, NewGridSchema, NewOrganization},
-        schema::{grid_property_definition, grid_schema},
+        models::{
+            NewAgent, NewGridPropertyDefinition, NewGridPropertyValue, NewGridSchema,
+            NewOrganization, NewProperty, NewReportedValue, NewReporter,
+        },
+        schema::{
+            grid_property_definition, grid_property_value, grid_schema, property, reported_value,
+            reporter,
+        },
     };
     use crate::rest_api::{
         routes::{AgentSlice, BatchStatusResponse, OrganizationSlice},
@@ -86,7 +94,7 @@ mod test {
     use sawtooth_sdk::messaging::stream::{MessageFuture, MessageSender, SendError};
     use std::sync::mpsc::channel;
 
-    static DATABASE_URL: &str = "postgres://grid_test:grid_test@test_server:5432/grid_test";
+    static DATABASE_URL: &str = "postgres://grid_test:grid_test@127.0.0.1:5433/grid_test";
 
     static KEY1: &str = "111111111111111111111111111111111111111111111111111111111111111111";
     static KEY2: &str = "222222222222222222222222222222222222222222222222222222222222222222";
@@ -769,6 +777,48 @@ mod test {
     }
 
     ///
+    ///
+    ///
+    #[test]
+    fn test_list_properties_not_really() {
+        database::run_migrations(&DATABASE_URL).unwrap();
+        let test_pool = get_connection_pool();
+        let mut srv = create_test_server(ResponseType::ClientBatchStatusResponseOK);
+        populate_tnt_property_table(&test_pool.get().unwrap(), &get_property());
+
+        // let request = srv
+        //     .client(
+        //         http::Method::GET,
+        //         &format!("/schema/{}", "Test Grid Schema".to_string()),
+        //     )
+        //     .finish()
+        //     .unwrap();
+        let test = database::helpers::fetch_property(
+            &*test_pool.get().unwrap(),
+            "record_01",
+            "TestProperty",
+        )
+        .unwrap();
+        test_what_is_needed(test);
+        let history = database::helpers::list_property_history(
+            &*test_pool.get().unwrap(),
+            "record_01",
+            "TestProperty",
+            None,
+        );
+
+        println!("history {:?}", history);
+        assert!(false);
+        // let response = srv.execute(request.send()).unwrap();
+        // assert!(response.status().is_success());
+        // let test_schema: GridSchemaSlice =
+        //     serde_json::from_slice(&*response.body().wait().unwrap()).unwrap();
+        // assert_eq!(test_schema.name, "Test Grid Schema".to_string());
+        // assert_eq!(test_schema.owner, "phillips001".to_string());
+        // assert_eq!(test_schema.properties.len(), 2);
+    }
+
+    ///
     /// Verifies a GET /schema/{name} responds with a Not Found error
     ///     when there is no Grid Schema with the specified name
     ///
@@ -930,9 +980,180 @@ mod test {
             .unwrap();
     }
 
+    fn get_property() -> Vec<NewProperty> {
+        vec![
+            NewProperty {
+                start_block_num: 0,
+                end_block_num: MAX_BLOCK_NUM,
+                name: "TestProperty".to_string(),
+                record_id: "record_01".to_string(),
+                property_definition: "property_definition_1".to_string(),
+                current_page: 1,
+                wrapped: false,
+            },
+            NewProperty {
+                start_block_num: 0,
+                end_block_num: 2,
+                name: "TestProperty".to_string(),
+                record_id: "record_01".to_string(),
+                property_definition: "property_definition_1".to_string(),
+                current_page: 1,
+                wrapped: false,
+            },
+        ]
+    }
+
+    fn get_reporter() -> Vec<NewReporter> {
+        vec![
+            NewReporter {
+                start_block_num: 0,
+                end_block_num: MAX_BLOCK_NUM,
+                property_name: "TestProperty".to_string(),
+                record_id: "record_01".to_string(),
+                public_key: "key_1".to_string(),
+                authorized: true,
+                reporter_index: 0,
+            },
+            NewReporter {
+                start_block_num: 0,
+                end_block_num: 2,
+                property_name: "TestProperty".to_string(),
+                record_id: "record_01".to_string(),
+                public_key: "key_1".to_string(),
+                authorized: true,
+                reporter_index: 0,
+            },
+            NewReporter {
+                start_block_num: 0,
+                end_block_num: 3,
+                property_name: "TestProperty".to_string(),
+                record_id: "record_01".to_string(),
+                public_key: "key_2_changed!!!!".to_string(),
+                authorized: true,
+                reporter_index: 0,
+            },
+        ]
+    }
+
+    fn get_reported_value() -> Vec<NewReportedValue> {
+        vec![
+            NewReportedValue {
+                start_block_num: 0,
+                end_block_num: MAX_BLOCK_NUM,
+                property_name: "TestProperty".to_string(),
+                record_id: "record_01".to_string(),
+                reporter_index: 0,
+                timestamp: 1,
+                value_name: "grid_property_value_name".to_string(),
+            },
+            NewReportedValue {
+                start_block_num: 0,
+                end_block_num: 2,
+                property_name: "TestProperty".to_string(),
+                record_id: "record_01".to_string(),
+                reporter_index: 0,
+                timestamp: 1,
+                value_name: "grid_property_value_name".to_string(),
+            },
+        ]
+    }
+
+    fn get_grid_property_value() -> Vec<NewGridPropertyValue> {
+        vec![
+            NewGridPropertyValue {
+                start_block_num: 0,
+                end_block_num: MAX_BLOCK_NUM,
+                name: "grid_property_value_name".to_string(),
+                data_type: "String".to_string(),
+                bytes_value: None,
+                boolean_value: None,
+                number_value: None,
+                string_value: Some("value_1".to_string()),
+                enum_value: None,
+                struct_values: None,
+                lat_long_value: None,
+            },
+            NewGridPropertyValue {
+                start_block_num: 0,
+                end_block_num: 2,
+                name: "grid_property_value_name".to_string(),
+                data_type: "String".to_string(),
+                bytes_value: None,
+                boolean_value: None,
+                number_value: None,
+                string_value: Some("value_updated".to_string()),
+                enum_value: None,
+                struct_values: None,
+                lat_long_value: None,
+            },
+        ]
+    }
+
+    fn populate_tnt_property_table(conn: &PgConnection, properties: &[NewProperty]) {
+        clear_tnt_property_table(conn);
+        populate_reported_values_table(conn, &get_reported_value());
+        populate_reporters_table(conn, &get_reporter());
+        insert_into(property::table)
+            .values(properties)
+            .execute(conn)
+            .map(|_| ())
+            .unwrap();
+    }
+
+    fn populate_reported_values_table(conn: &PgConnection, reported_values: &[NewReportedValue]) {
+        clear_tnt_reported_value_table(conn);
+        populate_grid_property_value_table(conn, &get_grid_property_value());
+        insert_into(reported_value::table)
+            .values(reported_values)
+            .execute(conn)
+            .map(|_| ())
+            .unwrap();
+    }
+
+    fn populate_grid_property_value_table(
+        conn: &PgConnection,
+        grid_property_values: &[NewGridPropertyValue],
+    ) {
+        clear_grid_property_value_table(conn);
+        insert_into(grid_property_value::table)
+            .values(grid_property_values)
+            .execute(conn)
+            .map(|_| ())
+            .unwrap();
+    }
+
+    fn populate_reporters_table(conn: &PgConnection, reporter: &[NewReporter]) {
+        clear_tnt_reporter_table(conn);
+        insert_into(reporter::table)
+            .values(reporter)
+            .execute(conn)
+            .map(|_| ())
+            .unwrap();
+    }
+
     fn clear_grid_schema_table(conn: &PgConnection) {
         use crate::database::schema::grid_schema::dsl::*;
         diesel::delete(grid_schema).execute(conn).unwrap();
+    }
+
+    fn clear_tnt_reported_value_table(conn: &PgConnection) {
+        use crate::database::schema::reported_value::dsl::*;
+        diesel::delete(reported_value).execute(conn).unwrap();
+    }
+
+    fn clear_tnt_reporter_table(conn: &PgConnection) {
+        use crate::database::schema::reporter::dsl::*;
+        diesel::delete(reporter).execute(conn).unwrap();
+    }
+
+    fn clear_tnt_property_table(conn: &PgConnection) {
+        use crate::database::schema::property::dsl::*;
+        diesel::delete(property).execute(conn).unwrap();
+    }
+
+    fn clear_grid_property_value_table(conn: &PgConnection) {
+        use crate::database::schema::grid_property_value::dsl::*;
+        diesel::delete(grid_property_value).execute(conn).unwrap();
     }
 
     fn get_property_definition() -> Vec<NewGridPropertyDefinition> {

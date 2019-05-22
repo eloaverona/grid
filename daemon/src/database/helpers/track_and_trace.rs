@@ -16,15 +16,21 @@
  */
 
 use super::models::{
-    NewAssociatedAgent, NewProperty, NewProposal, NewRecord, NewReportedValue, NewReporter,
+    GridPropertyDefinition, GridPropertyValue, NewAssociatedAgent, NewProperty, NewProposal,
+    NewRecord, NewReportedValue, NewReporter, Property, ReportedValue,
+    ReportedValueWithGridPropertyValueAndReporter, Reporter,
 };
-use super::schema::{associated_agent, property, proposal, record, reported_value, reporter};
+use super::schema::{
+    associated_agent, grid_property_definition, grid_property_value, property, proposal, record,
+    reported_value, reported_value_with_grid_property_value_and_reporter, reporter,
+};
 use super::MAX_BLOCK_NUM;
 
 use diesel::{
-    dsl::{insert_into, update},
+    dsl::{insert_into, min, update},
     pg::PgConnection,
     prelude::*,
+    result::Error::NotFound,
     QueryResult,
 };
 
@@ -101,7 +107,12 @@ pub fn update_property_end_block_num(
 
 pub fn insert_proposals(conn: &PgConnection, proposals: &[NewProposal]) -> QueryResult<()> {
     for proposal in proposals {
-        update_proposal_end_block_num(conn, &proposal.record_id, proposal.start_block_num)?;
+        update_proposal_end_block_num(
+            conn,
+            &proposal.record_id,
+            &proposal.receiving_agent,
+            proposal.start_block_num,
+        )?;
     }
 
     insert_into(proposal::table)
@@ -113,12 +124,14 @@ pub fn insert_proposals(conn: &PgConnection, proposals: &[NewProposal]) -> Query
 pub fn update_proposal_end_block_num(
     conn: &PgConnection,
     record_id: &str,
+    receiving_agent: &str,
     current_block_num: i64,
 ) -> QueryResult<()> {
     update(proposal::table)
         .filter(
             proposal::record_id
                 .eq(record_id)
+                .and(proposal::receiving_agent.eq(receiving_agent))
                 .and(proposal::end_block_num.eq(MAX_BLOCK_NUM)),
         )
         .set(proposal::end_block_num.eq(current_block_num))
@@ -222,4 +235,125 @@ pub fn update_reporter_end_block_num(
         .set(reporter::end_block_num.eq(current_block_num))
         .execute(conn)
         .map(|_| ())
+}
+
+pub fn list_property_history(
+    conn: &PgConnection,
+    record_id: &str,
+    property_name: &str,
+    block_num: Option<i64>,
+) {
+    //-> QueryResult<Vec<i64>> {//QueryResult<Vec<(ReportedValue, Option<GridPropertyValue>, String, Option<i64>)>> {
+    let block_num = block_num.unwrap_or(MAX_BLOCK_NUM);
+
+    let test = reported_value_with_grid_property_value_and_reporter::table
+        .filter(reported_value_with_grid_property_value_and_reporter::end_block_num.lt(block_num))
+        .load::<ReportedValueWithGridPropertyValueAndReporter>(conn);
+    //let test: QueryResult<Vec<(ReportedValue, Option<GridPropertyValue>, Reporter)>> =
+    // reported_value::table
+    //     .filter(
+    //         reported_value::property_name
+    //             .eq(property_name)
+    //             .and(reported_value::record_id.eq(record_id))
+    //             .and(reported_value::end_block_num.lt(block_num)),
+    //     )
+    //     .left_join(
+    //         grid_property_value::table.on(grid_property_value::name
+    //             .eq(reported_value::value_name)
+    //             .and(grid_property_value::end_block_num.eq(reported_value::end_block_num))),
+    //     )
+    //     .inner_join(
+    //         reporter::table.on(reporter::record_id
+    //             .eq(reported_value::record_id)
+    //             .and(reporter::property_name.eq(reported_value::property_name))
+    //             .and(reporter::reporter_index.eq(reported_value::reporter_index))
+    //             .and(reporter::end_block_num.ge(reported_value::end_block_num))),
+    //     )
+    //     // This left join can return more than one reporter match for the same reported_value
+    //     // the distinct_on will make sure we return a single match for the reported_value,
+    //     // we don't care which match we return as the only information we are interested in the
+    //     // reporter is the public_key, which does not change.
+    //     //.select((reported_value::all_columns, grid_property_value::all_columns))
+    //     .group_by((reported_value::id, grid_property_value::id, reporter::id))
+    //     //.filter(min(reporter::end_block_num))
+    //     //.select(reporter::end_block_num)
+    //     .load(conn);
+
+    println!("group_by {:?}", test);
+}
+
+pub fn fetch_property(
+    conn: &PgConnection,
+    record_id: &str,
+    property_name: &str,
+) -> QueryResult<Option<Property>> {
+    property::table
+        .filter(
+            property::name
+                .eq(property_name)
+                .and(property::record_id.eq(record_id))
+                .and(property::end_block_num.eq(MAX_BLOCK_NUM)),
+        )
+        .first(conn)
+        .map(Some)
+        .or_else(|err| if err == NotFound { Ok(None) } else { Err(err) })
+        // .left_join(
+        //     grid_property_definition::table.on(grid_property_definition::name
+        //         .eq(property::property_definition)
+        //         .and(grid_property_definition::end_block_num.eq(property::end_block_num))),
+        // )
+        // .left_join(
+        //     reported_value::table.on(reported_value::record_id
+        //         .eq(property::record_id)
+        //         .and(reported_value::property_name.eq(property::name))
+        //         .and(reported_value::end_block_num.eq(property::end_block_num))),
+        // )
+        // .left_join(
+        //     grid_property_value::table.on(grid_property_value::name
+        //         .eq(reported_value::value_name)
+        //         .and(grid_property_value::end_block_num.eq(reported_value::end_block_num))),
+        // )
+        // .left_join(
+        //     reporter::table.on(reporter::record_id
+        //         .eq(property::record_id)
+        //         .and(reporter::property_name.eq(property::name))
+        //         .and(reporter::end_block_num.eq(property::end_block_num))),
+        // )
+        // .load(conn)
+}
+
+pub fn fetch_reported_value(
+    conn: &PgConnection,
+    record_id: &str,
+    property_name: &str,
+) -> QueryResult<Option<ReportedValue>> {
+    reported_value::table
+        .filter(
+            reported_value::property_name
+                .eq(property_name)
+                .and(reported_value::record_id.eq(record_id))
+                .and(reported_value::end_block_num.eq(MAX_BLOCK_NUM)),
+        )
+        .first(conn)
+        .map(Some)
+        .or_else(|err| if err == NotFound { Ok(None) } else { Err(err) })
+}
+
+pub fn fetch_reporter(
+    conn: &PgConnection,
+    record_id: &str,
+    property_name: &str,
+    reporter_index: i32,
+) -> QueryResult<Option<Reporter>> {
+    reporter::table
+        .filter(
+            reporter::property_name
+                .eq(property_name)
+                .and(reporter::record_id.eq(record_id))
+                .and(reporter::reporter_index.eq(reporter_index))
+                .and(reporter::end_block_num.eq(MAX_BLOCK_NUM)),
+        )
+        .first(conn)
+        .map(Some)
+        .or_else(|err| if err == NotFound { Ok(None) } else { Err(err) })
 }

@@ -356,6 +356,26 @@ pub struct Reporter {
     pub reporter_index: i32,
 }
 
+#[derive(Queryable, Debug)]
+pub struct ReportedValueWithGridPropertyValueAndReporter {
+    pub property_name: String,
+    pub record_id: String,
+    pub reporter_index: i32,
+    pub timestamp: i64,
+    pub value_name: String,
+    pub data_type: String,
+    pub bytes_value: Option<Vec<u8>>,
+    pub boolean_value: Option<bool>,
+    pub number_value: Option<i64>,
+    pub string_value: Option<String>,
+    pub enum_value: Option<i32>,
+    pub struct_values: Option<Vec<String>>,
+    pub lat_long_value: Option<LatLongValue>,
+    pub end_block_num: i64,
+    pub public_key: String,
+    pub authorized: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
