@@ -16,15 +16,16 @@
  */
 
 use super::models::{
-    GridPropertyDefinition, GridPropertyValue, NewAssociatedAgent, NewProperty, NewProposal,
-    NewRecord, NewReportedValue, NewReporter, Property, ReportedValue,
-    ReportedValueWithGridPropertyValueAndReporter, Reporter,
+    GridPropertyDefinition, NewAssociatedAgent, NewProperty, NewProposal, NewRecord,
+    NewReportedValue, NewReporter, Property, ReportedValue, ReportedValueWithReporterAndMetadata,
+    Reporter, ReporterWithMetadata,
 };
 use super::schema::{
-    associated_agent, grid_property_definition, grid_property_value, property, proposal, record,
-    reported_value, reported_value_with_grid_property_value_and_reporter, reporter,
+    agent, associated_agent, grid_property_definition, property, proposal, record, reported_value,
+    reported_value_with_reporter_and_metadata, reporter, reporter_with_metadata,
 };
 use super::MAX_BLOCK_NUM;
+use serde_json::Value as JsonValue;
 
 use diesel::{
     dsl::{insert_into, min, update},
@@ -237,51 +238,6 @@ pub fn update_reporter_end_block_num(
         .map(|_| ())
 }
 
-pub fn list_property_history(
-    conn: &PgConnection,
-    record_id: &str,
-    property_name: &str,
-    block_num: Option<i64>,
-) {
-    //-> QueryResult<Vec<i64>> {//QueryResult<Vec<(ReportedValue, Option<GridPropertyValue>, String, Option<i64>)>> {
-    let block_num = block_num.unwrap_or(MAX_BLOCK_NUM);
-
-    let test = reported_value_with_grid_property_value_and_reporter::table
-        .filter(reported_value_with_grid_property_value_and_reporter::end_block_num.lt(block_num))
-        .load::<ReportedValueWithGridPropertyValueAndReporter>(conn);
-    //let test: QueryResult<Vec<(ReportedValue, Option<GridPropertyValue>, Reporter)>> =
-    // reported_value::table
-    //     .filter(
-    //         reported_value::property_name
-    //             .eq(property_name)
-    //             .and(reported_value::record_id.eq(record_id))
-    //             .and(reported_value::end_block_num.lt(block_num)),
-    //     )
-    //     .left_join(
-    //         grid_property_value::table.on(grid_property_value::name
-    //             .eq(reported_value::value_name)
-    //             .and(grid_property_value::end_block_num.eq(reported_value::end_block_num))),
-    //     )
-    //     .inner_join(
-    //         reporter::table.on(reporter::record_id
-    //             .eq(reported_value::record_id)
-    //             .and(reporter::property_name.eq(reported_value::property_name))
-    //             .and(reporter::reporter_index.eq(reported_value::reporter_index))
-    //             .and(reporter::end_block_num.ge(reported_value::end_block_num))),
-    //     )
-    //     // This left join can return more than one reporter match for the same reported_value
-    //     // the distinct_on will make sure we return a single match for the reported_value,
-    //     // we don't care which match we return as the only information we are interested in the
-    //     // reporter is the public_key, which does not change.
-    //     //.select((reported_value::all_columns, grid_property_value::all_columns))
-    //     .group_by((reported_value::id, grid_property_value::id, reporter::id))
-    //     //.filter(min(reporter::end_block_num))
-    //     //.select(reporter::end_block_num)
-    //     .load(conn);
-
-    println!("group_by {:?}", test);
-}
-
 pub fn fetch_property(
     conn: &PgConnection,
     record_id: &str,
@@ -297,63 +253,76 @@ pub fn fetch_property(
         .first(conn)
         .map(Some)
         .or_else(|err| if err == NotFound { Ok(None) } else { Err(err) })
-        // .left_join(
-        //     grid_property_definition::table.on(grid_property_definition::name
-        //         .eq(property::property_definition)
-        //         .and(grid_property_definition::end_block_num.eq(property::end_block_num))),
-        // )
-        // .left_join(
-        //     reported_value::table.on(reported_value::record_id
-        //         .eq(property::record_id)
-        //         .and(reported_value::property_name.eq(property::name))
-        //         .and(reported_value::end_block_num.eq(property::end_block_num))),
-        // )
-        // .left_join(
-        //     grid_property_value::table.on(grid_property_value::name
-        //         .eq(reported_value::value_name)
-        //         .and(grid_property_value::end_block_num.eq(reported_value::end_block_num))),
-        // )
-        // .left_join(
-        //     reporter::table.on(reporter::record_id
-        //         .eq(property::record_id)
-        //         .and(reporter::property_name.eq(property::name))
-        //         .and(reporter::end_block_num.eq(property::end_block_num))),
-        // )
-        // .load(conn)
 }
 
-pub fn fetch_reported_value(
+pub fn fetch_reported_value_with_reporter_and_metadata(
     conn: &PgConnection,
     record_id: &str,
     property_name: &str,
-) -> QueryResult<Option<ReportedValue>> {
-    reported_value::table
+) -> QueryResult<Option<ReportedValueWithReporterAndMetadata>> {
+    reported_value_with_reporter_and_metadata::table
         .filter(
-            reported_value::property_name
+            reported_value_with_reporter_and_metadata::property_name
                 .eq(property_name)
-                .and(reported_value::record_id.eq(record_id))
-                .and(reported_value::end_block_num.eq(MAX_BLOCK_NUM)),
+                .and(reported_value_with_reporter_and_metadata::record_id.eq(record_id))
+                .and(
+                    reported_value_with_reporter_and_metadata::reported_value_end_block_num
+                        .eq(MAX_BLOCK_NUM),
+                ),
         )
         .first(conn)
         .map(Some)
         .or_else(|err| if err == NotFound { Ok(None) } else { Err(err) })
 }
 
-pub fn fetch_reporter(
+pub fn fetch_reporter_with_metadata(
     conn: &PgConnection,
     record_id: &str,
     property_name: &str,
     reporter_index: i32,
-) -> QueryResult<Option<Reporter>> {
+) -> QueryResult<Option<ReporterWithMetadata>> {
+    reporter_with_metadata::table
+        .filter(
+            reporter_with_metadata::property_name
+                .eq(property_name)
+                .and(reporter_with_metadata::record_id.eq(record_id))
+                .and(reporter_with_metadata::reporter_index.eq(reporter_index))
+                .and(reporter_with_metadata::reporter_end_block_num.eq(MAX_BLOCK_NUM)),
+        )
+        .first(conn)
+        .map(Some)
+        .or_else(|err| if err == NotFound { Ok(None) } else { Err(err) })
+}
+
+pub fn list_reporters(
+    conn: &PgConnection,
+    record_id: &str,
+    property_name: &str,
+) -> QueryResult<Vec<Reporter>> {
     reporter::table
         .filter(
             reporter::property_name
                 .eq(property_name)
                 .and(reporter::record_id.eq(record_id))
-                .and(reporter::reporter_index.eq(reporter_index))
                 .and(reporter::end_block_num.eq(MAX_BLOCK_NUM)),
         )
-        .first(conn)
-        .map(Some)
-        .or_else(|err| if err == NotFound { Ok(None) } else { Err(err) })
+        .load::<Reporter>(conn)
+}
+
+pub fn list_reported_value_with_reporter_and_metadata(
+    conn: &PgConnection,
+    record_id: &str,
+    property_name: &str,
+) -> QueryResult<Vec<ReportedValueWithReporterAndMetadata>> {
+    reported_value_with_reporter_and_metadata::table
+        .filter(
+            reported_value_with_reporter_and_metadata::property_name
+                .eq(property_name)
+                .and(reported_value_with_reporter_and_metadata::record_id.eq(record_id))
+                .and(
+                    reported_value_with_reporter_and_metadata::reported_value_end_block_num
+                        .le(MAX_BLOCK_NUM),
+                ),
+        )
+        .load::<ReportedValueWithReporterAndMetadata>(conn)
 }

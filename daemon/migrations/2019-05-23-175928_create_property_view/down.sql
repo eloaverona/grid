@@ -13,4 +13,6 @@
 -- limitations under the License.
 -- ------------------------------------------------------------------------------
 
-DROP VIEW reported_value_with_grid_property_value_and_reporter;
+
+DROP VIEW IF EXISTS reported_value_with_reporter_and_metadata;
+DROP VIEW IF EXISTS reporter_with_metadata;

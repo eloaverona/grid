@@ -26,7 +26,7 @@ table! {
         org_id -> Varchar,
         active -> Bool,
         roles -> Array<Varchar>,
-        metadata -> Array<Json>,
+        metadata -> Json,
     }
 }
 
@@ -150,7 +150,6 @@ table! {
         record_id -> Text,
         reporter_index -> Int4,
         timestamp -> Int8,
-        value_name -> Text,
         data_type -> Text,
         bytes_value -> Nullable<Bytea>,
         boolean_value -> Nullable<Bool>,
@@ -178,12 +177,12 @@ table! {
 table! {
     use diesel::sql_types::*;
     use super::LatLong;
-    reported_value_with_grid_property_value_and_reporter (property_name, end_block_num) {
+    reported_value_with_reporter_and_metadata (id) {
+        id -> Int8,
         property_name -> Text,
         record_id -> Text,
         reporter_index -> Int4,
         timestamp -> Int8,
-        value_name -> Text,
         data_type -> Text,
         bytes_value ->  Nullable<Bytea>,
         boolean_value ->  Nullable<Bool>,
@@ -192,9 +191,24 @@ table! {
         enum_value ->  Nullable<Int4>,
         struct_values ->  Nullable<Array<Text>>,
         lat_long_value -> Nullable<LatLong>,
-        end_block_num -> Int8,
+        public_key ->  Nullable<Text>,
+        authorized ->  Nullable<Bool>,
+        metadata ->  Nullable<Json>,
+        reported_value_end_block_num -> Int8,
+        reporter_end_block_num ->  Nullable<Int8>,
+    }
+}
+
+table! {
+    reporter_with_metadata (id) {
+        id -> Int8,
+        property_name -> Text,
+        record_id -> Text,
         public_key -> Text,
         authorized -> Bool,
+        reporter_index -> Int4,
+        metadata -> Nullable<Json>,
+        reporter_end_block_num -> Int8,
     }
 }
 

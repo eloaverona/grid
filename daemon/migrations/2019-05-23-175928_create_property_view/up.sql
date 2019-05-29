@@ -19,62 +19,90 @@
 --- reporter table and then uses an window function to identify the valid row
 --- at each block height.
 
-CREATE VIEW reported_value_with_grid_property_value_and_reporter
+CREATE VIEW reporter_with_metadata
 AS
-  SELECT DISTINCT property_name,
-                  record_id,
-                  reporter_index,
-                  timestamp,
-                  value_name,
-                  data_type,
-                  bytes_value,
-                  boolean_value,
-                  number_value,
-                  string_value,
-                  enum_value,
-                  struct_values,
-                  lat_long_value,
-                  end_block_num,
-                  public_key,
-                  authorized
-  FROM   (SELECT DISTINCT Row_number()
-                            OVER (
-                              partition BY id
-                              ORDER BY end_block_num) AS RowNum,
-                          *
+  SELECT id,
+         property_name,
+         record_id,
+         public_key,
+         authorized,
+         reporter_index,
+         metadata,
+         reporter_end_block_num
+  FROM   (SELECT Row_number()
+                   OVER (
+                     partition BY id
+                     ORDER BY agent_end_block_num) AS RowNum,
+                 *
+          FROM   (SELECT reporter.id,
+                         reporter.property_name,
+                         reporter.record_id,
+                         reporter.reporter_index,
+                         reporter.authorized,
+                         reporter.public_key,
+                         reporter.end_block_num as "reporter_end_block_num",
+                         agent.end_block_num as "agent_end_block_num",
+                         agent.metadata
+                  FROM   reporter
+                         LEFT JOIN agent
+                                ON reporter.public_key = agent.public_key
+                                   AND reporter.end_block_num <=
+                                       agent.end_block_num) AS
+                 join_tables) X
+  WHERE  rownum = 1;
+
+CREATE VIEW reported_value_with_reporter_and_metadata
+AS
+  SELECT id,
+         property_name,
+         record_id,
+         reporter_index,
+         timestamp,
+         data_type,
+         bytes_value,
+         boolean_value,
+         number_value,
+         string_value,
+         enum_value,
+         struct_values,
+         lat_long_value,
+         public_key,
+         authorized,
+         metadata,
+         reported_value_end_block_num,
+         reporter_end_block_num
+  FROM   (SELECT Row_number()
+                   OVER (
+                     partition BY id
+                     ORDER BY reporter_end_block_num) AS RowNum,
+                 *
           FROM   (SELECT reported_value.id,
                          reported_value.property_name,
                          reported_value.record_id,
                          reported_value.reporter_index,
                          reported_value.timestamp,
-                         reported_value.value_name,
-                         grid_property_value.data_type,
-                         grid_property_value.bytes_value,
-                         grid_property_value.boolean_value,
-                         grid_property_value.number_value,
-                         grid_property_value.string_value,
-                         grid_property_value.enum_value,
-                         grid_property_value.struct_values,
-                         grid_property_value.lat_long_value,
-                         reporter.end_block_num,
-                         reporter.public_key,
-                         reporter.authorized
+                         reported_value.data_type,
+                         reported_value.bytes_value,
+                         reported_value.boolean_value,
+                         reported_value.number_value,
+                         reported_value.string_value,
+                         reported_value.enum_value,
+                         reported_value.struct_values,
+                         reported_value.lat_long_value,
+                         reported_value.end_block_num as "reported_value_end_block_num",
+                         reporter_with_metadata.reporter_end_block_num,
+                         reporter_with_metadata.public_key,
+                         reporter_with_metadata.authorized,
+                         reporter_with_metadata.metadata
                   FROM   reported_value
-                         INNER JOIN grid_property_value
-                                ON reported_value.value_name =
-                                   grid_property_value.NAME
-                                   AND reported_value.start_block_num =
-                                       grid_property_value.start_block_num
-                                   AND reported_value.end_block_num =
-                                       grid_property_value.end_block_num
-                         INNER JOIN reporter
-                                ON reported_value.record_id = reporter.record_id
-                                   AND
-                         reported_value.property_name = reporter.property_name
-                                   AND
-                         reported_value.reporter_index = reporter.reporter_index
-                                   AND
-                         reported_value.end_block_num <= reporter.end_block_num)
-                 AS
+                         LEFT JOIN reporter_with_metadata
+                                ON reported_value.record_id =
+                                   reporter_with_metadata.record_id
+                                   AND reported_value.property_name =
+                                       reporter_with_metadata.property_name
+                                   AND reported_value.reporter_index =
+                                       reporter_with_metadata.reporter_index
+                                   AND reported_value.end_block_num <=
+                                       reporter_with_metadata.reporter_end_block_num) AS
                  join_tables) X
   WHERE  rownum = 1;
