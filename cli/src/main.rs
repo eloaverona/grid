@@ -72,8 +72,11 @@ fn run() -> Result<(), CliError> {
                 (about: "Create an agent")
                 (@arg org_id: +takes_value +required "organization ID")
                 (@arg public_key: +takes_value +required "public key")
-                (@arg active: "Is user active")
                 (@arg roles: --roles +takes_value +multiple "Roles assigned to agent")
+                (@arg active: --active conflicts_with[not_active] required_unless[not_active]
+                    "Set user as active")
+                (@arg not_active: --not_active conflicts_with[active] required_unless[active]
+                    "Set user as not active")
                 (@arg metadata: --metadata +takes_value +multiple
                     "Comma-separated key value pairs stored in metadata")
             )
@@ -81,8 +84,11 @@ fn run() -> Result<(), CliError> {
                 (about: "Update an agent")
                 (@arg org_id: +takes_value +required "organization ID")
                 (@arg public_key: +takes_value +required "public key")
-                (@arg active: "Is user active")
                 (@arg roles: --roles +takes_value +multiple "Roles assigned to agent")
+                (@arg active: --active conflicts_with[not_active] required_unless[not_active]
+                    "Set user as active")
+                (@arg not_active: --not_active conflicts_with[active] required_unless[active]
+                    "Set user as not active")
                 (@arg metadata: --metadata +takes_value +multiple
                     "Comma-separated key value pairs stored in metadata")
             )
@@ -247,10 +253,19 @@ fn run() -> Result<(), CliError> {
         },
         ("agent", Some(m)) => match m.subcommand() {
             ("create", Some(m)) => {
+                let active = if m.is_present("not_active") {
+                    false
+                } else if m.is_present("active") {
+                    true
+                } else {
+                    return Err(CliError::UserError(
+                        "--active or --not_active flag must be provided".to_string(),
+                    ));
+                };
                 let create_agent = CreateAgentActionBuilder::new()
                     .with_org_id(m.value_of("org_id").unwrap().into())
                     .with_public_key(m.value_of("public_key").unwrap().into())
-                    .with_active(m.is_present("active"))
+                    .with_active(active)
                     .with_roles(
                         m.values_of("roles")
                             .unwrap_or_default()
@@ -264,10 +279,19 @@ fn run() -> Result<(), CliError> {
                 agents::do_create_agent(&url, key, wait, create_agent, service_id)?
             }
             ("update", Some(m)) => {
+                let active = if m.is_present("not_active") {
+                    false
+                } else if m.is_present("active") {
+                    true
+                } else {
+                    return Err(CliError::UserError(
+                        "--active or --not_active flag must be provided".to_string(),
+                    ));
+                };
                 let update_agent = UpdateAgentActionBuilder::new()
                     .with_org_id(m.value_of("org_id").unwrap().into())
                     .with_public_key(m.value_of("public_key").unwrap().into())
-                    .with_active(m.is_present("active"))
+                    .with_active(active)
                     .with_roles(
                         m.values_of("roles")
                             .unwrap_or_default()
