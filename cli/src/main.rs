@@ -72,11 +72,11 @@ fn run() -> Result<(), CliError> {
                 (about: "Create an agent")
                 (@arg org_id: +takes_value +required "organization ID")
                 (@arg public_key: +takes_value +required "public key")
-                (@arg roles: --roles +takes_value +multiple "Roles assigned to agent")
                 (@arg active: --active conflicts_with[not_active] required_unless[not_active]
                     "Set user as active")
                 (@arg not_active: --not_active conflicts_with[active] required_unless[active]
                     "Set user as not active")
+                (@arg roles: --roles +takes_value +use_delimiter +multiple "Roles assigned to agent")
                 (@arg metadata: --metadata +takes_value +multiple
                     "Comma-separated key value pairs stored in metadata")
             )
@@ -84,11 +84,11 @@ fn run() -> Result<(), CliError> {
                 (about: "Update an agent")
                 (@arg org_id: +takes_value +required "organization ID")
                 (@arg public_key: +takes_value +required "public key")
-                (@arg roles: --roles +takes_value +multiple "Roles assigned to agent")
                 (@arg active: --active conflicts_with[not_active] required_unless[not_active]
                     "Set user as active")
                 (@arg not_active: --not_active conflicts_with[active] required_unless[active]
                     "Set user as not active")
+                (@arg roles: --roles +takes_value +use_delimiter +multiple "Roles assigned to agent")
                 (@arg metadata: --metadata +takes_value +multiple
                     "Comma-separated key value pairs stored in metadata")
             )
